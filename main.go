@@ -45,10 +45,11 @@ func main() {
 			pool = pool[:0]
 			totalWeight = 0
 			for _, entry := range fields[1:] {
-				name, weightStr, ok := strings.Cut(entry, ":")
-				if !ok {
+				parts := strings.SplitN(entry, ":", 2)
+				if len(parts) != 2 {
 					continue
 				}
+				name, weightStr := parts[0], parts[1]
 				w, err := strconv.Atoi(weightStr)
 				if err != nil {
 					continue
