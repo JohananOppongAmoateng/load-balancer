@@ -4,14 +4,13 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"strconv"
+	"sort"
 	"strings"
 )
 
 type backend struct {
-	name    string
-	weight  int
-	current int
+	name   string
+	active int
 }
 
 func main() {
@@ -19,20 +18,6 @@ func main() {
 	sc.Buffer(make([]byte, 1024*1024), 1024*1024)
 
 	var pool []backend
-	totalWeight := 0
-
-	pick := func() string {
-		var best *backend
-		for i := range pool {
-			b := &pool[i]
-			b.current += b.weight
-			if best == nil || b.current > best.current {
-				best = b
-			}
-		}
-		best.current -= totalWeight
-		return best.name
-	}
 
 	for sc.Scan() {
 		fields := strings.Fields(sc.Text())
@@ -43,19 +28,8 @@ func main() {
 		switch fields[0] {
 		case "POOL":
 			pool = pool[:0]
-			totalWeight = 0
-			for _, entry := range fields[1:] {
-				parts := strings.SplitN(entry, ":", 2)
-				if len(parts) != 2 {
-					continue
-				}
-				name, weightStr := parts[0], parts[1]
-				w, err := strconv.Atoi(weightStr)
-				if err != nil {
-					continue
-				}
-				pool = append(pool, backend{name: name, weight: w})
-				totalWeight += w
+			for _, name := range fields[1:] {
+				pool = append(pool, backend{name: name})
 			}
 			fmt.Println("OK")
 		case "PICK":
@@ -63,26 +37,42 @@ func main() {
 				fmt.Println("EMPTY")
 				continue
 			}
-			fmt.Println(pick())
-		case "PICKN":
-			if len(pool) == 0 {
-				fmt.Println("EMPTY")
+			best := 0
+			for i := 1; i < len(pool); i++ {
+				if pool[i].active < pool[best].active {
+					best = i
+				}
+			}
+			pool[best].active++
+			fmt.Println(pool[best].name)
+		case "DONE":
+			if len(fields) < 2 {
 				continue
 			}
-			n, err := strconv.Atoi(fields[1])
-			if err != nil || n < 0 {
-				continue
-			}
-			names := make([]string, n)
-			for i := 0; i < n; i++ {
-				names[i] = pick()
-			}
-			fmt.Println(strings.Join(names, ","))
-		case "RESET":
 			for i := range pool {
-				pool[i].current = 0
+				if pool[i].name == fields[1] {
+					if pool[i].active > 0 {
+						pool[i].active--
+					}
+					break
+				}
 			}
 			fmt.Println("OK")
+		case "STATUS":
+			type entry struct {
+				name   string
+				active int
+			}
+			entries := make([]entry, len(pool))
+			for i, b := range pool {
+				entries[i] = entry{name: b.name, active: b.active}
+			}
+			sort.Slice(entries, func(i, j int) bool {
+				return entries[i].name < entries[j].name
+			})
+			for _, e := range entries {
+				fmt.Printf("%s:%d\n", e.name, e.active)
+			}
 		}
 	}
 }
