@@ -13,6 +13,15 @@ type backend struct {
 	active int
 }
 
+func find(pool []backend, name string) int {
+	for i := range pool {
+		if pool[i].name == name {
+			return i
+		}
+	}
+	return -1
+}
+
 func main() {
 	sc := bufio.NewScanner(os.Stdin)
 	sc.Buffer(make([]byte, 1024*1024), 1024*1024)
@@ -33,15 +42,19 @@ func main() {
 			}
 			fmt.Println("OK")
 		case "PICK":
-			if len(pool) == 0 {
-				fmt.Println("EMPTY")
+			if len(fields) < 3 {
+				fmt.Println("ERR")
 				continue
 			}
-			best := 0
-			for i := 1; i < len(pool); i++ {
-				if pool[i].active < pool[best].active {
-					best = i
-				}
+			x, y := find(pool, fields[1]), find(pool, fields[2])
+			if x < 0 || y < 0 {
+				fmt.Println("ERR")
+				continue
+			}
+			best := x
+			if pool[y].active < pool[x].active ||
+				(pool[y].active == pool[x].active && pool[y].name < pool[x].name) {
+				best = y
 			}
 			pool[best].active++
 			fmt.Println(pool[best].name)
