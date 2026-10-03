@@ -4,29 +4,26 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"sort"
 	"strings"
 )
 
-type backend struct {
-	name   string
-	active int
-}
+const (
+	failThreshold = 3
+	okThreshold   = 2
+)
 
-func find(pool []backend, name string) int {
-	for i := range pool {
-		if pool[i].name == name {
-			return i
-		}
-	}
-	return -1
+type backend struct {
+	name  string
+	up    bool
+	fails int
+	oks   int
 }
 
 func main() {
 	sc := bufio.NewScanner(os.Stdin)
 	sc.Buffer(make([]byte, 1024*1024), 1024*1024)
 
-	var pool []backend
+	var pool []*backend
 
 	for sc.Scan() {
 		fields := strings.Fields(sc.Text())
@@ -38,53 +35,58 @@ func main() {
 		case "POOL":
 			pool = pool[:0]
 			for _, name := range fields[1:] {
-				pool = append(pool, backend{name: name})
+				pool = append(pool, &backend{name: name, up: true})
 			}
 			fmt.Println("OK")
-		case "PICK":
+		case "REPORT":
 			if len(fields) < 3 {
 				fmt.Println("ERR")
 				continue
 			}
-			x, y := find(pool, fields[1]), find(pool, fields[2])
-			if x < 0 || y < 0 {
+			var b *backend
+			for _, p := range pool {
+				if p.name == fields[1] {
+					b = p
+					break
+				}
+			}
+			if b == nil || (fields[2] != "OK" && fields[2] != "FAIL") {
 				fmt.Println("ERR")
 				continue
 			}
-			best := x
-			if pool[y].active < pool[x].active ||
-				(pool[y].active == pool[x].active && pool[y].name < pool[x].name) {
-				best = y
-			}
-			pool[best].active++
-			fmt.Println(pool[best].name)
-		case "DONE":
-			if len(fields) < 2 {
-				continue
-			}
-			for i := range pool {
-				if pool[i].name == fields[1] {
-					if pool[i].active > 0 {
-						pool[i].active--
-					}
-					break
+			if fields[2] == "OK" {
+				b.oks++
+				b.fails = 0
+				if b.oks >= okThreshold {
+					b.up = true
+				}
+			} else {
+				b.fails++
+				b.oks = 0
+				if b.fails >= failThreshold {
+					b.up = false
 				}
 			}
 			fmt.Println("OK")
 		case "STATUS":
-			type entry struct {
-				name   string
-				active int
+			for _, b := range pool {
+				state := "DOWN"
+				if b.up {
+					state = "UP"
+				}
+				fmt.Printf("%s %s\n", b.name, state)
 			}
-			entries := make([]entry, len(pool))
-			for i, b := range pool {
-				entries[i] = entry{name: b.name, active: b.active}
+		case "HEALTHY":
+			var names []string
+			for _, b := range pool {
+				if b.up {
+					names = append(names, b.name)
+				}
 			}
-			sort.Slice(entries, func(i, j int) bool {
-				return entries[i].name < entries[j].name
-			})
-			for _, e := range entries {
-				fmt.Printf("%s:%d\n", e.name, e.active)
+			if len(names) == 0 {
+				fmt.Println("none")
+			} else {
+				fmt.Println(strings.Join(names, ","))
 			}
 		}
 	}
